@@ -1,0 +1,190 @@
+button.link_button {
+  background: url("./icons/external-link.png") center no-repeat;
+  background-size: 22px 22px;
+  width: 44px;
+  height: 44px;
+  position: relative;
+  cursor: pointer;
+  overflow: visible;
+  -webkit-appearance: none;
+  display: block;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  float: right;
+  opacity: 0.75;
+  -webkit-transition: opacity 0.2s;
+  transition: opacity 0.2s;
+  -webkit-box-shadow: none;
+  box-shadow: none;
+  /* background-position: -44px -44px; */
+}
+
+button.link_button:hover {
+  opacity: 1;
+}
+
+[aria-label="powered-by-commandbar"] {
+  display: none !important;
+}
+
+[aria-label="feedback"] {
+  display: none !important;
+}
+
+.loadingspinner {
+  pointer-events: none;
+  width: 2.5em;
+  height: 2.5em;
+  border: 0.4em solid transparent;
+  border-color: #eee;
+  border-top-color: #55492b;
+  border-radius: 50%;
+  animation: loadingspin 1s linear infinite;
+  position: fixed;
+  z-index: 999;
+  overflow: show;
+  margin: auto;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+}
+
+@keyframes loadingspin {
+  100% {
+    transform: rotate(360deg)
+  }
+}
+
+.feather-star {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 30px;
+  height: 30px;
+  color: white;
+  stroke-width: 2.5px;
+  filter: drop-shadow(0px 0px 2px rgba(0, 0, 0, 0.5)) opacity(0.8);
+}
+
+.flickr-authed .image:hover .feather-star {
+  display: inline;
+  filter: drop-shadow(0px 0px 2px rgba(0, 0, 0, 0.5)) opacity(0.8);
+}
+
+.flickr-authed .feather-star[data-faved="yes"] {
+  display: inline;
+  filter: drop-shadow(0px 0px 2px rgba(0, 0, 0, 0.5)) opacity(0.8);
+}
+
+.flickr-authed .feather-star[data-faved="yes"] {
+  fill: white;
+}
+
+.flickr-authed .image .feather-star:hover {
+  stroke-width: 3px;
+  filter: drop-shadow(0px 0px 2px rgba(0, 0, 0, 0.5));
+}
+
+.image {
+  cursor: pointer;
+}
+
+/* a:link {
+  color: blue;
+} */
+
+a:visited {
+  color: purple;
+}
+
+a:focus,
+a:hover {
+  border-bottom: 1px solid;
+}
+
+a:active {
+  color: red;
+}
+
+a[href^="http"] {
+  background: url('icons/external-link.svg') no-repeat 100% 0;
+  background-size: 16px 16px;
+  padding-right: 19px;
+}
+
+/* div.pswp__caption__center {
+  max-width: none;
+  font-size: 20px;
+}
+
+.pswp__caption__center .book-title-link {
+  color: #dbdbee;
+} */
+
+.fade-in-text {
+  -webkit-animation: fadeIn linear 2s;
+  -moz-animation: fadeIn linear 2s;
+  -o-animation: fadeIn linear 2s;
+  -ms-animation: fadeIn linear 2s;
+  animation: fadeIn linear 2s;
+}
+
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+@-moz-keyframes fadeIn {
+  0% {
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+@-webkit-keyframes fadeIn {
+  0% {
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+@-o-keyframes fadeIn {
+  0% {
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+@-ms-keyframes fadeIn {
+  0% {
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+.gallery-image {
+  width: 100%;
+}
+
+.gallery-image img {
+  width: 100%;
+}
