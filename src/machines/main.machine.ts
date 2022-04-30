@@ -4,6 +4,7 @@ import { assign, createMachine, EventObject, forwardTo, send } from "xstate";
 import { initWorker, queries, QUERY_NAMES } from "./db";
 import { flickrMachine } from "./flickr.machine";
 import { Cursor, Image } from "./types";
+import { assignableProduce as produce } from "./utils";
 
 function loadTemplate(template: string): HTMLElement {
   return (document.querySelector(`#${template}`) as HTMLTemplateElement).content.firstElementChild?.cloneNode(true) as HTMLElement;
@@ -27,7 +28,7 @@ type MyEvent = EventObject
   | { type: "ADD_IMAGES"; images: Image[] }
   | { type: "CLEAR_IMAGES" }
   | { type: "START_FLICKR_AUTH" }
-  | { type: "TOGGLE_FAVE_IMAGE", faved: boolean, imageId: string }
+  | { type: "TOGGLE_FAVE_IMAGE", imageId: string }
   | { type: "IMAGE_FAVE_STATE_CHANGE"; faved: boolean, imageId: string }
   | { type: "FLICKR_FAVE_TOGGLE_RESULT", imageId: string, isFaved: boolean }
   | { type: "SET_FAVE_STATE", imageId: string, faved: boolean }
@@ -49,6 +50,10 @@ function getPhotoId(imageEl: HTMLElement): string | null {
   let style = window.getComputedStyle(imageEl);
   let bi = style.backgroundImage.slice(4, -1).replace(/"/g, "");
   return /\/(\d+)_/g.exec(bi)?.[1] || null;
+}
+
+function getImageById(images: Image[], imageId: string): Image | null {
+  return images.find(i => i.id === imageId) || null;
 }
 
 const mainMachine = createMachine(
@@ -106,7 +111,11 @@ const mainMachine = createMachine(
         actions: "startFlickrAuth",
       },
       TOGGLE_FAVE_IMAGE: {
-        actions: "toggleFaveImage",
+        actions: [
+          "immediatelyToggleFaveState",
+          "sendFaveToggleToFlickr",
+          // "toggleFaveImage",
+        ]
       },
       // FLICKR_FAVE_TOGGLE_RESULT: {
       //   actions: "onFlickrFaveToggleResult",
@@ -201,7 +210,27 @@ const mainMachine = createMachine(
       }
     },
     actions: {
-      toggleFaveImage: forwardTo("flickr"),
+      sendFaveToggleToFlickr: send(
+        (ctx, e) => {
+          const image = getImageById(ctx.images, e.imageId) as Image;
+          return {
+            type: "TOGGLE_FAVE_IMAGE",
+            imageId: e.imageId,
+            faved: image.isFaved,
+          };
+        },
+        { to: "flickr" }
+      ),
+      immediatelyToggleFaveState: assign(
+        produce((draft, e) => {
+          const image = getImageById(draft.images, e.imageId);
+          if (!image) {
+            console.error("Tried to toggle fave state of image that doesn't exist");
+          } else {
+            image.isFaved = !image.isFaved;
+          }
+        })
+      ),
       // onFlickrFaveToggleResult: send(
       //   (_, e) => ({ type: "SET_FAVE_STATE", imageId: e.imageId, faved: e.isFaved }),
       //   { to: "gallery" }

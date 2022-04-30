@@ -1,9 +1,13 @@
 import preact from '@preact/preset-vite';
 import { ConfigEnv, defineConfig, UserConfigExport } from 'vite';
+import svgrPlugin from 'vite-plugin-svgr';
 
 export default function ({ }: ConfigEnv): UserConfigExport {
   return defineConfig({
-    plugins: [preact()],
+    plugins: [
+      preact(),
+      svgrPlugin()
+    ],
     resolve: {
       alias: {
         react: 'preact/compat',

@@ -1,5 +1,6 @@
 // import { inspect } from "@xstate/inspect";
 import { useInterpret, useSelector } from '@xstate/react';
+import clsx from 'clsx';
 import { useEffect } from "react";
 import { Gallery } from './gallery';
 import './index.css';
@@ -32,20 +33,31 @@ export function App() {
     return state.context.images;
   });
 
+  const isAuthed = useSelector(service, (state) => {
+    return state.children.flickr.getSnapshot().matches("authorised");
+  });
+
   if (!images.length) {
     return (
       <div class="loadingspinner" id="loading"></div>
     )
   } else {
     return (
-      <Gallery
-        images={images}
-        loadMore={
-          (count: number) => {
-            service.send({ type: "NEED_MORE_IMAGES", limit: count })
+      <div className={clsx("container", isAuthed && "flickr-authed")}>
+        <Gallery
+          images={images}
+          loadMore={
+            (count: number) => {
+              service.send({ type: "NEED_MORE_IMAGES", limit: count })
+            }
           }
-        }
-      />
+          toggleFave={
+            (imageId: string) => {
+              service.send({ type: "TOGGLE_FAVE_IMAGE", imageId: imageId });
+            }
+          }
+        />
+      </div>
     )
   }
 }

@@ -9,7 +9,8 @@ export interface Typegen0 {
     forwardToRouter: "CHANGE_URL";
     queueFetch: "NEED_MORE_IMAGES";
     startFlickrAuth: "START_FLICKR_AUTH";
-    toggleFaveImage: "TOGGLE_FAVE_IMAGE";
+    immediatelyToggleFaveState: "TOGGLE_FAVE_IMAGE";
+    sendFaveToggleToFlickr: "TOGGLE_FAVE_IMAGE";
     storeWorker: "done.invoke.initialiseSQLWorker";
     showError: "RETRY_FAILED" | "";
     addFetchedToContext: "done.invoke.mainMachine.active.fetching:invocation[0]";

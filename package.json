@@ -9,8 +9,10 @@
   },
   "dependencies": {
     "@xstate/react": "^3.0.0",
+    "clsx": "^1.1.1",
     "commandbar": "^1.6.6",
     "fetch-jsonp": "^1.2.1",
+    "immer": "^9.0.12",
     "masonic": "^3.6.5",
     "navaid": "^1.2.0",
     "preact": "^10.5.15",
@@ -24,6 +26,7 @@
     "@types/toastify-js": "^1.11.0",
     "prettier": "^2.6.2",
     "typescript": "^4.5.4",
-    "vite": "^2.9.5"
+    "vite": "^2.9.5",
+    "vite-plugin-svgr": "^1.1.0"
   }
 }

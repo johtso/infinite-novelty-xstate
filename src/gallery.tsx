@@ -1,22 +1,11 @@
 import { Masonry, useInfiniteLoader } from "masonic";
+import { ReactComponent as StarIcon } from './icons/star.svg';
 import { Image } from "./machines/types";
 import { flickrThumbUrl } from "./utils";
 
 
-const GalleryImage = ({ index, data, width }: { index: number, data: Image, width: number }) => {
-  const imageHight = data.height;
-  const imageWidth = data.width;
-  const ratio = imageWidth / imageHight;
-  const height = width / ratio;
 
-  return (
-    <div className="gallery-image" key={data.id} onClick={() => alert(`${data.id} clicked`)} style={`height: ${height}px`} >
-      <img alt="gallery image" src={flickrThumbUrl(data.id, data.server, data.secret)} />
-    </div>
-  )
-};
-
-export function Gallery({ images, loadMore }: { images: Image[], loadMore: (count: number) => void }) {
+export function Gallery({ images, loadMore, toggleFave }: { images: Image[], loadMore: (count: number) => void, toggleFave: (id: string) => void }) {
 
   const maybeLoadMore = useInfiniteLoader(
     (startIndex, stopIndex) => {
@@ -29,6 +18,28 @@ export function Gallery({ images, loadMore }: { images: Image[], loadMore: (coun
     }
   );
 
+  const GalleryImage = ({ index, data, width }: { index: number, data: Image, width: number }) => {
+    const imageHight = data.height;
+    const imageWidth = data.width;
+    const ratio = imageWidth / imageHight;
+    const height = width / ratio;
+
+    return (
+      <div
+        className="gallery-image"
+        key={data.id}
+        style={{ height: `${height}px`, }}
+        data-faved={data.isFaved ? "yes" : "no"}
+      >
+        <img alt="gallery image" src={flickrThumbUrl(data.id, data.server, data.secret)} loading="eager" />
+        <StarIcon
+          onClick={() => toggleFave(data.id)}
+        />
+      </div>
+    )
+  };
+
+
   return (
     <Masonry
       onRender={maybeLoadMore}
@@ -40,7 +51,7 @@ export function Gallery({ images, loadMore }: { images: Image[], loadMore: (coun
       // Sets the minimum column width to 172px
       columnWidth={300}
       // Pre-renders 5 windows worth of content
-      overscanBy={2}
+      overscanBy={3}
       // This is the grid item component
       render={GalleryImage}
     />

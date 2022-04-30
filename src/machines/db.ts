@@ -1,10 +1,10 @@
 import { createDbWorker, WorkerHttpvfs } from "sql.js-httpvfs";
-import { query } from 'sqliterally';
-import sqliteWorkerURL from "sql.js-httpvfs/dist/sqlite.worker.js?url";
 import sqlWASMURL from "sql.js-httpvfs/dist/sql-wasm.wasm?url";
-
+import sqliteWorkerURL from "sql.js-httpvfs/dist/sqlite.worker.js?url";
+import { query } from 'sqliterally';
+import { Cursor, Image } from "./types";
 import { apply } from './utils';
-import { Image, Cursor } from "./types";
+
 
 declare var __MODE__: string;
 
@@ -45,7 +45,7 @@ async function initWorker() {
   return worker;
 }
 
-async function cursorQuery(randomStart: boolean, order: {fields: (keyof Cursor)[], direction: "asc" | "desc"}, where: string | null, worker: WorkerHttpvfs, limit: number, cursor: Cursor | null, initial: boolean): Promise<{ images: Image[], cursor: Cursor }> {
+async function cursorQuery(randomStart: boolean, order: { fields: (keyof Cursor)[], direction: "asc" | "desc" }, where: string | null, worker: WorkerHttpvfs, limit: number, cursor: Cursor | null, initial: boolean): Promise<{ images: Image[], cursor: Cursor }> {
   let images;
   if (limit < 1) {
     throw "limit must be a positive number";
@@ -56,13 +56,13 @@ async function cursorQuery(randomStart: boolean, order: {fields: (keyof Cursor)[
     .from`images`
     .limit([`${limit}`])
     .orderBy([order.fields.map(f => `${f} ${order.direction}`).join(", ")]);
-  
+
   if (where) {
     q = q.where([where]);
   }
-    
+
   if (cursor) {
-    let comparator = {"asc": ">", "desc": "<"}[order.direction];
+    let comparator = { "asc": ">", "desc": "<" }[order.direction];
     if (initial) {
       comparator += "=";
     }
@@ -74,7 +74,7 @@ async function cursorQuery(randomStart: boolean, order: {fields: (keyof Cursor)[
       q = q.where(["(rowid >= abs(random() % (select max(rowid) from images)))"]);
     }
   }
-    
+
   let qObj = q.build();
   images = await worker.db.query(qObj.sql, qObj.values) as Image[];
   let lastImage = images[images.length - 1];
@@ -85,23 +85,23 @@ async function cursorQuery(randomStart: boolean, order: {fields: (keyof Cursor)[
     "id": lastImage.id,
     "rowid": lastImage.rowid,
   };
-    
+
   return {
     'images': images,
     'cursor': newCursor
   }
 }
 
-let randomCursorQuery = apply(cursorQuery, true, {fields: ["rowid"], direction: "asc"})
+let randomCursorQuery = apply(cursorQuery, true, { fields: ["rowid"], direction: "asc" })
 
 const QUERY_NAMES = ["random", "randompopular", "randomoverlooked", "popular"] as const;
 type QueryName = typeof QUERY_NAMES[number];
 
 let queries = {
   "random": apply(randomCursorQuery, null),
-  "randompopular": apply(randomCursorQuery,  "faves > 0"),
+  "randompopular": apply(randomCursorQuery, "faves > 0"),
   "randomoverlooked": apply(randomCursorQuery, "views < 50 and faves = 0"),
-  "popular": apply(cursorQuery, false, {fields: ["faves", "views", "comments", "id"], direction: "desc"}, "faves > 0"),
-} as {[key in QueryName]: (worker: WorkerHttpvfs, limit: number, cursor: Cursor | null, initial: boolean) => Promise<{ images: Image[], cursor: Cursor }>};
+  "popular": apply(cursorQuery, false, { fields: ["faves", "views", "comments", "id"], direction: "desc" }, "faves > 0"),
+} as { [key in QueryName]: (worker: WorkerHttpvfs, limit: number, cursor: Cursor | null, initial: boolean) => Promise<{ images: Image[], cursor: Cursor }> };
 
 export { initWorker, queries, QUERY_NAMES };

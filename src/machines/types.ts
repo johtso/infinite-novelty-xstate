@@ -9,6 +9,7 @@ interface Image {
   faves: number;
   comments: number;
   views: number;
+  isFaved?: boolean;
 }
 
 type Cursor = Pick<Image, "faves" | "views" | "comments" | "id" | "rowid">;

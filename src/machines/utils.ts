@@ -1,3 +1,4 @@
+import produce, { Draft } from "immer";
 import Toastify from "toastify-js";
 import "toastify-js/src/toastify.css";
 import { EventObject } from "xstate";
@@ -69,6 +70,12 @@ const isShallowEqual = (obj1: any, obj2: any) =>
   Object.keys(obj1).length === Object.keys(obj2).length &&
   Object.keys(obj1).every(key => obj1[key] === obj2[key]);
 
+
+const assignableProduce =
+  <TContext, TEvent>(recipe: (draft: Draft<TContext>, event: TEvent) => void) =>
+    (context: TContext, event: TEvent): Partial<TContext> =>
+      produce(context, (draft) => recipe(draft, event));
+
 export {
   idFromFlickrUrl,
   flickrThumbUrl,
@@ -77,6 +84,7 @@ export {
   marshalPhoto,
   assertEventType,
   isShallowEqual,
-  showToast
+  showToast,
+  assignableProduce
 };
 

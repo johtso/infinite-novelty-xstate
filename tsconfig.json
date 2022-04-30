@@ -29,6 +29,9 @@
         "./node_modules/preact/compat"
       ]
     },
+    "types": [
+      "vite-plugin-svgr/client"
+    ]
   },
   "include": [
     "src"
