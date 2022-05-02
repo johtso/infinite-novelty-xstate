@@ -14,4 +14,9 @@ interface Image {
 
 type Cursor = Pick<Image, "faves" | "views" | "comments" | "id" | "rowid">;
 
-export type { Image, Cursor };
+type Query = (limit: number, cursor: Cursor | null, initial: boolean) => Promise<{
+  images: Image[];
+  cursor: Cursor;
+}>
+
+export type { Image, Cursor, Query };

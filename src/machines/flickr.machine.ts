@@ -1,8 +1,10 @@
-import { ActorRefFrom, assign, createMachine, Sender, sendParent, spawn } from "xstate";
+import { ActorRefFrom, assign, createMachine, Sender, spawn } from "xstate";
 import { pure } from "xstate/lib/actions";
 import { AuthorizationModal } from "../auth-modal";
-import { showToast } from "./utils";
+import { Image } from "./types";
+import { assignableProduce as produce, showToast } from "./utils";
 
+type ImageId = Image["id"];
 
 interface FaveToggleRequest {
   imageId: string;
@@ -15,10 +17,10 @@ interface FaveToggleRequest {
 type FlickrMachineEvent =
   | { type: "AUTHORISE" }
   | { type: "STORAGE_HAS_AUTH_ID" }
-  | { type: "TOGGLE_FAVE_IMAGE", imageId: string, faved: boolean }
-  | { type: "FLICKR_FAVE_TOGGLE_RESULT", imageId: string, isFaved: boolean }
-  | { type: "FLICKR_FAVE_TOGGLE_FAILED", imageId: string, isFaved: boolean, isUndo: boolean }
-  | { type: "FLICKR_FAVE_TOGGLE_REQUEST_FINISHED", imageId: string }
+  | { type: "TOGGLE_FAVE_IMAGE", imageId: ImageId }
+  | { type: "FLICKR_FAVE_TOGGLE_RESULT", imageId: ImageId, isFaved: boolean }
+  | { type: "FLICKR_FAVE_TOGGLE_FAILED", imageId: ImageId, isFaved: boolean, isUndo: boolean }
+  | { type: "FLICKR_FAVE_TOGGLE_REQUEST_FINISHED", imageId: ImageId }
   | { type: "AUTH_SUCCESS" }
   | { type: "AUTH_ERROR", error: string }
   | { type: "AUTH_WINDOW_CLOSED" }
@@ -38,27 +40,32 @@ export const flickrMachine = createMachine({
   schema: {
     events: {} as FlickrMachineEvent,
     context: {} as {
-      faveRequests: { [key: string]: FaveToggleRequest };
+      faveRequests: { [key: ImageId]: FaveToggleRequest };
+      faveStates: { [key: ImageId]: boolean };
     },
     services: {} as {}
   },
   tsTypes: {} as import("./flickr.machine.typegen").Typegen0,
   context: {
     faveRequests: {},
+    faveStates: {}
   },
   initial: "starting",
   on: {
+    "*": {
+      actions: (ctx, event) => {
+        console.log(event);
+      }
+    },
     FLICKR_FAVE_TOGGLE_REQUEST_FINISHED: {
       actions: "removeFaveRequest",
     },
     FLICKR_FAVE_TOGGLE_RESULT: {
-      actions: [
-        "reportFaveResult",
-      ]
+      actions: "assignFaveResult"
     },
     FLICKR_FAVE_TOGGLE_FAILED: {
       actions: [
-        "reportFaveResult",
+        "assignFaveResult",
         "reportFaveFailed"
       ]
     }
@@ -113,10 +120,10 @@ export const flickrMachine = createMachine({
       entry: [
         "storeStateAuthed"
       ],
-      exit: [
-        "storeStateNotAuthed",
-        () => showToast("Flickr account no longer linked.")
-      ],
+      // exit: [
+      //   "storeStateNotAuthed",
+      //   () => showToast("Flickr account no longer linked.")
+      // ],
 
       on: {
         TOGGLE_FAVE_IMAGE: {
@@ -131,15 +138,17 @@ export const flickrMachine = createMachine({
       isStateAuthed: () => localStorage.getItem("flickr-authorised") === "yes",
     },
     actions: {
-      reportFaveResult: sendParent((_, e) => {
-        // typescript get isUndo property if it exists
-        let isFaved = e.isFaved;
-        // if an undo toggle failed, assume the first action never got to the server.
-        if (e.type === "FLICKR_FAVE_TOGGLE_FAILED" && e.isUndo) {
-          isFaved = !isFaved;
-        }
-        return { type: "FLICKR_FAVE_TOGGLE_RESULT", imageId: e.imageId, isFaved: isFaved };
-      }),
+      assignFaveResult: assign(
+        produce(({ faveStates }, e) => {
+          // typescript get isUndo property if it exists
+          let isFaved = e.isFaved;
+          // if an undo toggle failed, assume the first action never got to the server.
+          if (e.type === "FLICKR_FAVE_TOGGLE_FAILED" && e.isUndo) {
+            isFaved = !isFaved;
+          }
+          faveStates[e.imageId] = isFaved;
+        })
+      ),
       reportFaveFailed: (_, e) => {
         let action = e.isFaved ? "unfave" : "fave";
         showToast(`Failed to ${action} image.`);
@@ -160,7 +169,12 @@ export const flickrMachine = createMachine({
         // if it is toggling to the same state, don't do anything
         // if it is toggling to the opposite state, cancel the request
         // spawn a new request
-        const { imageId, faved } = e;
+        console.log("toggleFaveImage", e);
+        const { imageId } = e;
+        const currentFaveState = ctx.faveStates[imageId] || false;
+        console.log({ currentFaveState });
+        const faved = !currentFaveState;
+
         const outstandingRequest = ctx.faveRequests[imageId];
         let isUndo = false;
         if (outstandingRequest) {
@@ -175,20 +189,19 @@ export const flickrMachine = createMachine({
         }
         const { callback, controller } = makeFaveToggleRequestCallback(imageId, faved, 5000, isUndo);
         const actor = spawn(callback);
-        return assign({
-          faveRequests: (ctx) => ({
-            ...ctx.faveRequests,
-            [imageId]: {
-              imageId,
+        return assign(
+          produce(({ faveRequests, faveStates }, e) => {
+            faveRequests[imageId] = {
               isFaved: faved,
+              controller,
               actor,
-              controller
-            }
-          })
-        })
+              imageId
+            };
+            faveStates[imageId] = faved;
+          }))
       }),
       storeStateAuthed: () => localStorage.setItem("flickr-authorised", "yes"),
-      storeStateNotAuthed: () => localStorage.setItem("flickr-authorised", "no"),
+      // storeStateNotAuthed: () => localStorage.setItem("flickr-authorised", "no"),
     },
     services: {
       authStateMonitor: (_, __) => (sendBack, _) => {
@@ -236,7 +249,7 @@ export const flickrMachine = createMachine({
 
 
 function makeFaveToggleRequestCallback(
-  imageId: string, isFaved: boolean, timeout: number, isUndo: boolean
+  imageId: ImageId, isFaved: boolean, timeout: number, isUndo: boolean
 ): {
   callback: (sendBack: Sender<FlickrMachineEvent>) => void,
   controller: AbortController,

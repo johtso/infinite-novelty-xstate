@@ -4,7 +4,6 @@ import { assign, createMachine, EventObject, forwardTo, send } from "xstate";
 import { initWorker, queries, QUERY_NAMES } from "./db";
 import { flickrMachine } from "./flickr.machine";
 import { Cursor, Image } from "./types";
-import { assignableProduce as produce } from "./utils";
 
 function loadTemplate(template: string): HTMLElement {
   return (document.querySelector(`#${template}`) as HTMLTemplateElement).content.firstElementChild?.cloneNode(true) as HTMLElement;
@@ -22,6 +21,7 @@ type MyEvent = EventObject
   | { type: "MODE_CHANGED"; mode: ViewerMode | null }
   | { type: "CURSOR_CHANGED"; mode: ViewerMode; cursor: Cursor }
   | { type: "NEED_MORE_IMAGES"; limit: number }
+  | { type: "REQUEST_IMAGE_RANGE"; startIndex: number; stopIndex: number }
   | { type: "IMAGES_FETCHED", images: Image[], cursor: Cursor }
   | { type: "RESET_IMAGES" }
   | { type: "RETRY_FAILED"; retryCount: number; data: any }
@@ -35,7 +35,8 @@ type MyEvent = EventObject
   // Navigation Events
   | { type: "URL_INVALID" }
   | { type: "URL_INVALID_CURSOR" }
-  | { type: "URL_NAVIGATION"; mode: ViewerMode; cursor: Cursor | null; initial?: boolean }
+  | { type: "URL_NAVIGATION"; mode: ViewerMode; cursor: Cursor | null }
+  | { type: "ENTER_BOOK_MODE"; cursor: Cursor | null; bookId: string }
   | { type: "CHANGE_URL"; url: string }
 
 function parseURLCursor(cursorString: string): Cursor {
@@ -67,6 +68,8 @@ const mainMachine = createMachine(
         cursor: Cursor | null;
         images: Image[];
         fetchQueue: number[];
+        bookId: string | null;
+        highestIndexRequested: number;
       },
       services: {} as {
         initWorker: {
@@ -88,14 +91,28 @@ const mainMachine = createMachine(
       cursor: null,
       images: [],
       fetchQueue: [],
+      bookId: null,
+      highestIndexRequested: 0,
     },
     on: {
+      "*": {
+        actions: (ctx, event) => {
+          console.log(event);
+        }
+      },
       URL_NAVIGATION: {
         cond: "modeHasChanged",
         actions: [
           "assignNewMode",
           "clearImages",
           // "clearGallery",
+        ]
+      },
+      ENTER_BOOK_MODE: {
+        cond: "bookModeHasChanged",
+        actions: [
+          "onEnterBookMode",
+          "clearImages",
         ]
       },
       URL_INVALID_CURSOR: {
@@ -107,16 +124,20 @@ const mainMachine = createMachine(
       NEED_MORE_IMAGES: {
         actions: "queueFetch",
       },
+      REQUEST_IMAGE_RANGE: {
+        cond: "isRequestingNewImages",
+        actions: "onRequestImageRange"
+      },
       START_FLICKR_AUTH: {
         actions: "startFlickrAuth",
       },
-      TOGGLE_FAVE_IMAGE: {
-        actions: [
-          "immediatelyToggleFaveState",
-          "sendFaveToggleToFlickr",
-          // "toggleFaveImage",
-        ]
-      },
+      // TOGGLE_FAVE_IMAGE: {
+      //   actions: [
+      //     "immediatelyToggleFaveState",
+      //     "sendFaveToggleToFlickr",
+      //     // "toggleFaveImage",
+      //   ]
+      // },
       // FLICKR_FAVE_TOGGLE_RESULT: {
       //   actions: "onFlickrFaveToggleResult",
       // }
@@ -155,7 +176,7 @@ const mainMachine = createMachine(
         tags: ["starting"],
         always: {
           target: "active",
-          cond: (ctx, _) => Boolean(ctx.mode),
+          cond: (ctx, _) => Boolean(ctx.mode || ctx.bookId),
         }
       },
       active: {
@@ -207,30 +228,36 @@ const mainMachine = createMachine(
       anyFetchQueued: (ctx, _) => ctx.fetchQueue.length > 0,
       modeHasChanged: (ctx, e) => {
         return ctx.mode !== e.mode;
+      },
+      bookModeHasChanged: (ctx, e) => {
+        return ctx.bookId !== e.bookId;
+      },
+      isRequestingNewImages: (ctx, e) => {
+        return e.stopIndex > ctx.highestIndexRequested;
       }
     },
     actions: {
-      sendFaveToggleToFlickr: send(
-        (ctx, e) => {
-          const image = getImageById(ctx.images, e.imageId) as Image;
-          return {
-            type: "TOGGLE_FAVE_IMAGE",
-            imageId: e.imageId,
-            faved: image.isFaved,
-          };
-        },
-        { to: "flickr" }
-      ),
-      immediatelyToggleFaveState: assign(
-        produce((draft, e) => {
-          const image = getImageById(draft.images, e.imageId);
-          if (!image) {
-            console.error("Tried to toggle fave state of image that doesn't exist");
-          } else {
-            image.isFaved = !image.isFaved;
-          }
-        })
-      ),
+      // sendFaveToggleToFlickr: send(
+      //   (ctx, e) => {
+      //     const image = getImageById(ctx.images, e.imageId) as Image;
+      //     return {
+      //       type: "TOGGLE_FAVE_IMAGE",
+      //       imageId: e.imageId,
+      //       faved: image.isFaved,
+      //     };
+      //   },
+      //   { to: "flickr" }
+      // ),
+      // immediatelyToggleFaveState: assign(
+      //   produce((draft, e) => {
+      //     const image = getImageById(draft.images, e.imageId);
+      //     if (!image) {
+      //       console.error("Tried to toggle fave state of image that doesn't exist");
+      //     } else {
+      //       image.isFaved = !image.isFaved;
+      //     }
+      //   })
+      // ),
       // onFlickrFaveToggleResult: send(
       //   (_, e) => ({ type: "SET_FAVE_STATE", imageId: e.imageId, faved: e.isFaved }),
       //   { to: "gallery" }
@@ -241,6 +268,9 @@ const mainMachine = createMachine(
         { type: "MODE_CHANGED", mode: ctx.mode },
         { to: "router" }
       ),
+      onEnterBookMode: assign({
+        bookId: (_, e) => e.bookId,
+      }),
       storeWorker: assign({
         worker: (_, e) => {
           return e.data;
@@ -253,10 +283,17 @@ const mainMachine = createMachine(
       //   (_, e) => ({ type: "ADD_IMAGES", images: e.data.images }),
       //   { to: "gallery" }
       // ),
+      onRequestImageRange: send((ctx, e) => {
+        const { startIndex, stopIndex } = e;
+        const start = (startIndex > ctx.highestIndexRequested) ? startIndex : ctx.highestIndexRequested;
+        return { type: "NEED_MORE_IMAGES", limit: stopIndex - start }
+      }),
       queueFetch: (ctx, e) => {
+        console.log("queuing fetch");
         ctx.fetchQueue.push(e.limit);
       },
       removeOldestFromQueue: (ctx, _) => {
+        console.log("removing oldest from queue");
         ctx.fetchQueue.shift();
       },
       addFetchedToContext: assign({
@@ -282,8 +319,14 @@ const mainMachine = createMachine(
         const limit = ctx.fetchQueue[0];
         const { mode, cursor } = ctx;
         const initial = !ctx.images.length;
-        const query = queries[mode as ViewerMode];
-        return query(ctx.worker as WorkerHttpvfs, limit, cursor, initial);
+        console.log("fetching more images", { limit, mode, cursor, initial, bookId: ctx.bookId });
+        if (ctx.bookId !== null) {
+          const query = queries.book;
+          return query(ctx.bookId, ctx.worker as WorkerHttpvfs, limit, cursor, initial);
+        } else {
+          const query = queries[mode as ViewerMode];
+          return query(ctx.worker as WorkerHttpvfs, limit, cursor, initial);
+        }
       },
       router: () => (sendBack, receive) => {
         const navigateToDefault = () => {
@@ -308,6 +351,20 @@ const mainMachine = createMachine(
                 sendBack({ type: "URL_NAVIGATION", mode: mode, cursor: cursor });
               }
             });
+        });
+
+        router.on(`/book/:bookId/:cursor?`, (params) => {
+          params = params as Params;
+          var cursor: Cursor | null = null;
+          try {
+            cursor = params.cursor ? parseURLCursor(params.cursor) : null;
+          } catch (e) {
+            // If we couldn't parse the cursor just discard it
+            router.route(`/book/${params.bookId}`)
+            sendBack("URL_INVALID_CURSOR");
+          } finally {
+            sendBack({ type: "ENTER_BOOK_MODE", bookId: params.bookId, cursor: cursor });
+          }
         });
 
         receive((e: MyEvent) => {

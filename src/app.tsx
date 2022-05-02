@@ -1,14 +1,19 @@
-// import { inspect } from "@xstate/inspect";
 import { useInterpret, useSelector } from '@xstate/react';
 import clsx from 'clsx';
 import { useEffect } from "react";
+import { ActorRefFrom, StateFrom } from "xstate";
 import { Gallery } from './gallery';
 import './index.css';
+import { flickrMachine } from "./machines/flickr.machine";
 import mainMachine from "./machines/main.machine";
 
+type FaveStates = { [key: string]: boolean };
+
+const getFlickr = (state: StateFrom<typeof mainMachine>) => state.children.flickr as ActorRefFrom<typeof flickrMachine>
 
 export function App() {
   const service = useInterpret(mainMachine);
+  const flickr = getFlickr(service.getSnapshot());
 
   useEffect(() => {
     service.send({ type: "NEED_MORE_IMAGES", limit: 20 });
@@ -33,27 +38,60 @@ export function App() {
     return state.context.images;
   });
 
+  const faveStates = useSelector(
+    flickr,
+    (state): FaveStates => {
+      const faveStates = state.context.faveStates;
+      const imageIds = images.map((image) => image.id);
+      const filteredFaveStates: FaveStates = {};
+      Object.keys(faveStates).forEach((key) => {
+        if (imageIds.includes(key)) {
+          filteredFaveStates[key] = faveStates[key];
+        }
+      });
+      return filteredFaveStates;
+    },
+    (a, b) => {
+      return JSON.stringify(a) === JSON.stringify(b)
+    }
+  );
+
   const isAuthed = useSelector(service, (state) => {
     return state.children.flickr.getSnapshot().matches("authorised");
   });
 
-  if (!images.length) {
+  useEffect(() => {
+    if (window.CommandBar) {
+      window.CommandBar.setContext({ flickrAuthState: isAuthed });
+    }
+  }, [isAuthed, window.CommandBar]);
+
+  const imagesWithFaves = images.map((image) => {
+    return {
+      ...image,
+      isFaved: faveStates[image.id]
+    }
+  });
+
+  if (!imagesWithFaves.length) {
     return (
-      <div class="loadingspinner" id="loading"></div>
+      <div className="loadingspinner" id="loading"></div>
     )
   } else {
     return (
       <div className={clsx("container", isAuthed && "flickr-authed")}>
         <Gallery
-          images={images}
+          images={imagesWithFaves}
           loadMore={
-            (count: number) => {
-              service.send({ type: "NEED_MORE_IMAGES", limit: count })
+            (startIndex: number, stopIndex: number) => {
+              service.send({ type: "REQUEST_IMAGE_RANGE", startIndex, stopIndex })
             }
           }
           toggleFave={
             (imageId: string) => {
-              service.send({ type: "TOGGLE_FAVE_IMAGE", imageId: imageId });
+              console.log("toggleFave", imageId);
+
+              getFlickr(service.getSnapshot()).send({ type: "TOGGLE_FAVE_IMAGE", imageId: imageId });
             }
           }
         />

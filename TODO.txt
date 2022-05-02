@@ -1,2 +1,6 @@
 have method on image model?
 fade in images
+don't show error if you cancel a fave
+
+
+logging that says what machine it game from, including some extra metadata
