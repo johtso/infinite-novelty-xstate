@@ -1,9 +1,13 @@
 import Navaid, { Params } from "navaid";
 import { WorkerHttpvfs } from "sql.js-httpvfs";
-import { assign, createMachine, EventObject, forwardTo, send } from "xstate";
+import { actions, assign, createMachine, EventObject, forwardTo, send } from "xstate";
 import { initWorker, queries, QUERY_NAMES } from "./db";
 import { flickrMachine } from "./flickr.machine";
+import { makeImageStreamMachine } from "./imagestream.machine";
 import { Cursor, Image } from "./types";
+import { apply } from "./utils";
+
+const { choose, log } = actions;
 
 function loadTemplate(template: string): HTMLElement {
   return (document.querySelector(`#${template}`) as HTMLTemplateElement).content.firstElementChild?.cloneNode(true) as HTMLElement;
@@ -39,6 +43,15 @@ type MyEvent = EventObject
   | { type: "ENTER_BOOK_MODE"; cursor: Cursor | null; bookId: string }
   | { type: "CHANGE_URL"; url: string }
 
+type MyContext = {
+  worker: WorkerHttpvfs | null;
+  mode: ViewerMode | null;
+  cursor: Cursor | null;
+  images: Image[];
+  fetchQueue: number[];
+  bookId: string | null;
+}
+
 function parseURLCursor(cursorString: string): Cursor {
   return JSON.parse(atob(cursorString));
 }
@@ -47,30 +60,12 @@ function encodeURLCursor(cursor: Cursor): string {
   return btoa(JSON.stringify(cursor));
 }
 
-function getPhotoId(imageEl: HTMLElement): string | null {
-  let style = window.getComputedStyle(imageEl);
-  let bi = style.backgroundImage.slice(4, -1).replace(/"/g, "");
-  return /\/(\d+)_/g.exec(bi)?.[1] || null;
-}
-
-function getImageById(images: Image[], imageId: string): Image | null {
-  return images.find(i => i.id === imageId) || null;
-}
-
 const mainMachine = createMachine(
   {
     id: "mainMachine",
     schema: {
       events: {} as MyEvent,
-      context: {} as {
-        worker: WorkerHttpvfs | null;
-        mode: ViewerMode | null;
-        cursor: Cursor | null;
-        images: Image[];
-        fetchQueue: number[];
-        bookId: string | null;
-        highestIndexRequested: number;
-      },
+      context: {} as MyContext,
       services: {} as {
         initWorker: {
           data: WorkerHttpvfs;
@@ -92,7 +87,6 @@ const mainMachine = createMachine(
       images: [],
       fetchQueue: [],
       bookId: null,
-      highestIndexRequested: 0,
     },
     on: {
       "*": {
@@ -100,36 +94,26 @@ const mainMachine = createMachine(
           console.log(event);
         }
       },
-      URL_NAVIGATION: {
-        cond: "modeHasChanged",
-        actions: [
-          "assignNewMode",
-          "clearImages",
-          // "clearGallery",
-        ]
-      },
+      URL_NAVIGATION: [
+        {
+          actions: [
+            "clearBookId",
+            "assignModeIfChanged"
+          ]
+        }
+      ],
       ENTER_BOOK_MODE: {
         cond: "bookModeHasChanged",
         actions: [
-          "onEnterBookMode",
-          "clearImages",
-        ]
+          "assignBookMode",
+          // "clearImages",
+        ],
       },
       URL_INVALID_CURSOR: {
         actions: "updateUrlAfterModeChange"
       },
       CHANGE_URL: {
         actions: "forwardToRouter"
-      },
-      NEED_MORE_IMAGES: {
-        actions: "queueFetch",
-      },
-      REQUEST_IMAGE_RANGE: {
-        cond: "isRequestingNewImages",
-        actions: "onRequestImageRange"
-      },
-      START_FLICKR_AUTH: {
-        actions: "startFlickrAuth",
       },
       // TOGGLE_FAVE_IMAGE: {
       //   actions: [
@@ -159,18 +143,13 @@ const mainMachine = createMachine(
           id: "initialiseSQLWorker",
           src: "initWorker",
           onDone: {
-            actions: "storeWorker",
+            actions: "assignWorker",
             target: "waitingForMode"
           },
           onError: {
             target: "initFailed"
           }
         },
-        on: {
-          RETRY_FAILED: {
-            actions: "showError",
-          }
-        }
       },
       waitingForMode: {
         tags: ["starting"],
@@ -180,39 +159,50 @@ const mainMachine = createMachine(
         }
       },
       active: {
-        initial: "idle",
+        initial: "mainView",
+        invoke: {
+          id: "mainImageStream",
+          src: (ctx, _,) => {
+            if (!ctx.worker) {
+              throw new Error("Tried to start image stream but worker not initialised");
+            }
+            if (!ctx.mode) {
+              throw new Error("Tried to start image stream but there was no mode");
+            }
+            const query = queries[ctx.mode];
+            const specificQuery = apply(query, ctx.worker);
+            return makeImageStreamMachine(specificQuery)
+          },
+        },
         states: {
-          "idle": {
+          mainView: {
             always: {
-              cond: "anyFetchQueued",
-              target: "fetching",
+              cond: (ctx, _) => ctx.bookId !== null,
+              target: "viewingBook"
             }
           },
-          "fetching": {
-            invoke: {
-              src: "fetchMoreImages",
-              onDone: {
-                actions: [
-                  "addFetchedToContext",
-                  // "addImagesToGallery",
-                  "removeOldestFromQueue",
-                ],
-                target: "cooldown",
-              },
-              onError: {
-                target: "errored"
-              }
+          viewingBook: {
+            always: {
+              cond: (ctx, _) => ctx.bookId === null,
+              target: "mainView"
             },
-          },
-          "cooldown": {
-            after: {
-              1000: "idle"
-            }
-          },
-          "errored": {
-            always: {
-              actions: "showError",
-            }
+            invoke: {
+              id: "bookImageStream",
+              src: (ctx, _,) => {
+                if (!ctx.worker) {
+                  throw new Error("Tried to start image stream but worker not initialised");
+                }
+                if (!ctx.mode) {
+                  throw new Error("Tried to start image stream but there was no mode");
+                }
+                if (!ctx.bookId) {
+                  throw new Error("Tried to enter book view mode with no bookId in context");
+                }
+                const query = queries["book"];
+                const specificQuery = apply(query, ctx.bookId, ctx.worker);
+                return makeImageStreamMachine(specificQuery)
+              },
+            },
           }
         }
       },
@@ -225,109 +215,46 @@ const mainMachine = createMachine(
   },
   {
     guards: {
-      anyFetchQueued: (ctx, _) => ctx.fetchQueue.length > 0,
       modeHasChanged: (ctx, e) => {
         return ctx.mode !== e.mode;
       },
       bookModeHasChanged: (ctx, e) => {
         return ctx.bookId !== e.bookId;
       },
-      isRequestingNewImages: (ctx, e) => {
-        return e.stopIndex > ctx.highestIndexRequested;
-      }
     },
     actions: {
-      // sendFaveToggleToFlickr: send(
-      //   (ctx, e) => {
-      //     const image = getImageById(ctx.images, e.imageId) as Image;
-      //     return {
-      //       type: "TOGGLE_FAVE_IMAGE",
-      //       imageId: e.imageId,
-      //       faved: image.isFaved,
-      //     };
-      //   },
-      //   { to: "flickr" }
-      // ),
-      // immediatelyToggleFaveState: assign(
-      //   produce((draft, e) => {
-      //     const image = getImageById(draft.images, e.imageId);
-      //     if (!image) {
-      //       console.error("Tried to toggle fave state of image that doesn't exist");
-      //     } else {
-      //       image.isFaved = !image.isFaved;
-      //     }
-      //   })
-      // ),
-      // onFlickrFaveToggleResult: send(
-      //   (_, e) => ({ type: "SET_FAVE_STATE", imageId: e.imageId, faved: e.isFaved }),
-      //   { to: "gallery" }
-      // ),
-      startFlickrAuth: send("AUTHORISE", { to: "flickr" }),
       forwardToRouter: forwardTo("router"),
       updateUrlAfterModeChange: (ctx, _) => send(
         { type: "MODE_CHANGED", mode: ctx.mode },
         { to: "router" }
       ),
-      onEnterBookMode: assign({
+      assignBookMode: assign({
         bookId: (_, e) => e.bookId,
       }),
-      storeWorker: assign({
+      assignWorker: assign({
         worker: (_, e) => {
           return e.data;
         }
       }),
-      // clearGallery: send(
-      //   { type: "CLEAR_IMAGES" }, { to: "gallery" }
-      // ),
-      // addImagesToGallery: send(
-      //   (_, e) => ({ type: "ADD_IMAGES", images: e.data.images }),
-      //   { to: "gallery" }
-      // ),
-      onRequestImageRange: send((ctx, e) => {
-        const { startIndex, stopIndex } = e;
-        const start = (startIndex > ctx.highestIndexRequested) ? startIndex : ctx.highestIndexRequested;
-        return { type: "NEED_MORE_IMAGES", limit: stopIndex - start }
-      }),
-      queueFetch: (ctx, e) => {
-        console.log("queuing fetch");
-        ctx.fetchQueue.push(e.limit);
-      },
-      removeOldestFromQueue: (ctx, _) => {
-        console.log("removing oldest from queue");
-        ctx.fetchQueue.shift();
-      },
-      addFetchedToContext: assign({
-        images: (ctx, e) => {
-          return ctx.images.concat(e.data.images);
-        },
-        cursor: (_, e) => {
-          return e.data.cursor;
+      assignModeIfChanged: choose([
+        {
+          cond: "modeHasChanged",
+          actions: "assignNewMode",
         }
+      ]),
+      assignNewMode: assign({
+        mode: (_, e) => e.mode,
       }),
-      clearImages: assign({
-        images: (_, __) => [],
+      clearBookId: assign({
+        bookId: (_, e) => null,
       }),
-      assignNewMode: assign({ mode: (_, e) => e.mode }),
-      showError: (_, e) => {
-        console.error(e);
-      },
+      // showError: (_, e) => {
+      //   console.error(e);
+      // },
     },
     services: {
       flickr: flickrMachine,
       initWorker: initWorker,
-      fetchMoreImages: (ctx, _) => {
-        const limit = ctx.fetchQueue[0];
-        const { mode, cursor } = ctx;
-        const initial = !ctx.images.length;
-        console.log("fetching more images", { limit, mode, cursor, initial, bookId: ctx.bookId });
-        if (ctx.bookId !== null) {
-          const query = queries.book;
-          return query(ctx.bookId, ctx.worker as WorkerHttpvfs, limit, cursor, initial);
-        } else {
-          const query = queries[mode as ViewerMode];
-          return query(ctx.worker as WorkerHttpvfs, limit, cursor, initial);
-        }
-      },
       router: () => (sendBack, receive) => {
         const navigateToDefault = () => {
           router.route(`/${defaultMode}`);
@@ -390,6 +317,6 @@ const mainMachine = createMachine(
       }
     }
   }
-);
+).withConfig({ actions: {}, guards: {}, services: {} });
 
 export default mainMachine;

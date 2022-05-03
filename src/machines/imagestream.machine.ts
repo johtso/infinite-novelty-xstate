@@ -13,7 +13,7 @@ export const makeImageStreamMachine = (query: Query) => {
           query: Query;
           cursor: Cursor | null;
           images: Image[];
-          fetchQueue: number[];
+          fetchQueue: { start: number, limit: number }[];
         },
         services: {} as {
           fetchMoreImages: {
@@ -30,22 +30,28 @@ export const makeImageStreamMachine = (query: Query) => {
         query: query,
         cursor: null,
         images: [],
-        fetchQueue: [],
+        fetchQueue: [{ start: 0, limit: 20 }],
       },
       on: {
         LOAD_MORE_IMAGES: {
-          cond: "isRequestingNewImages",
           actions: "queueFetch"
         },
       },
       states: {
         active: {
           initial: "idle",
+          entry: (ctx) => { console.log("image stream started", query) },
           states: {
             "idle": {
               always: {
                 cond: "anyFetchQueued",
-                target: "fetching",
+                target: "fetching"
+              },
+              on: {
+                LOAD_MORE_IMAGES: {
+                  cond: "anyFetchQueued",
+                  target: "fetching"
+                }
               }
             },
             "fetching": {
@@ -84,9 +90,20 @@ export const makeImageStreamMachine = (query: Query) => {
       },
       actions: {
         queueFetch: (ctx, e) => {
-          console.log("queuing fetch");
-          // if we already have a fetch queued, replace it with this one?
-          ctx.fetchQueue.push(e.limit);
+          const last = ctx.fetchQueue[ctx.fetchQueue.length - 1];
+          const currentIndex = (last?.start + last?.limit) || ctx.images.length;
+          let startIndex = e.startIndex;
+          let limit = e.limit;
+          if (startIndex < currentIndex) {
+            limit -= currentIndex - startIndex;
+            startIndex = currentIndex;
+          }
+          if (limit) {
+            console.log("queuing fetch", { startIndex, limit });
+            ctx.fetchQueue.push({ start: startIndex, limit: limit });
+          } else {
+            console.log("ignoring fetch request, already satisfied");
+          }
         },
         removeOldestFromQueue: (ctx, _) => {
           console.log("removing oldest from queue");
@@ -106,13 +123,19 @@ export const makeImageStreamMachine = (query: Query) => {
       },
       services: {
         fetchMoreImages: (ctx, _) => {
-          const limit = ctx.fetchQueue[0];
-          const { cursor } = ctx;
+          const { start, limit } = ctx.fetchQueue[0];
+          // const currentIndex = ctx.images.length;
+          // const realLimit = limit - (currentIndex - start);
           const initial = !ctx.images.length;
-          console.log("fetching more images", { limit, cursor, initial });
-          return ctx.query(limit, cursor, initial);
+          // if (!realLimit) {
+          //   console.log("repeated request for images already fetched, doing nothing");
+          //   return new Promise
+          // } else {
+          console.log("fetching more images", { limit, cursor: ctx.cursor, initial });
+          return ctx.query(limit, ctx.cursor, initial);
+          // }
         },
       }
     }
-  );
+  ).withConfig({ actions: {}, guards: {}, services: {} });
 }

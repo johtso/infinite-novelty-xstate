@@ -57,11 +57,18 @@ button.link_button:hover {
   }
 }
 
-.feather-star {
-  display: none;
-  position: absolute;
-  top: 5px;
-  right: 5px;
+.fave-button {
+  display: flex;
+}
+
+.book-button {
+  display: flex;
+}
+
+.image-button {
+  visibility: hidden;
+  /* top: 5px;
+  right: 5px; */
   width: 30px;
   height: 30px;
   color: white;
@@ -69,24 +76,34 @@ button.link_button:hover {
   filter: drop-shadow(0px 0px 2px rgba(0, 0, 0, 0.5)) opacity(0.8);
 }
 
+/* . {
+  top: 5px;
+  right: 5px;
+  width: 30px;
+  height: 30px;
+  color: white;
+  stroke-width: 2.5px;
+  filter: drop-shadow(0px 0px 2px rgba(0, 0, 0, 0.5)) opacity(0.8);
+} */
+
 @media (hover: none) {
-  .feather-star {
-    display: inline;
+  .image-button {
+    visibility: visible;
   }
 }
 
-.flickr-authed .gallery-image:hover .feather-star {
-  display: inline;
+.flickr-authed .gallery-image:hover .image-button {
+  visibility: visible;
   filter: drop-shadow(0px 0px 2px rgba(0, 0, 0, 0.5)) opacity(0.8);
 }
 
-.flickr-authed .gallery-image[data-faved="yes"] .feather-star {
-  display: inline;
+.flickr-authed .gallery-image[data-faved="yes"] .fave-button {
+  visibility: visible;
   filter: drop-shadow(0px 0px 2px rgba(0, 0, 0, 0.5)) opacity(0.8);
   fill: white;
 }
 
-.flickr-authed .gallery-image .feather-star:hover {
+.flickr-authed .gallery-image .image-button:hover {
   stroke-width: 3px;
   filter: drop-shadow(0px 0px 2px rgba(0, 0, 0, 0.5));
 }
@@ -188,8 +205,20 @@ a[href^="http"] {
 .gallery-image {
   user-select: none;
   width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  flex-direction: row;
 }
 
-.gallery-image img {
-  width: 100%;
+/* when image is not loaded set opacity to 0 */
+/* .gallery-image:not(.loaded) {
+  opacity: 0;
+} */
+
+.gallery-image {
+  background-size: contain;
+}
+
+.hidden {
+  display: none;
 }

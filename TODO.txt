@@ -4,3 +4,5 @@ don't show error if you cancel a fave
 
 
 logging that says what machine it game from, including some extra metadata
+
+properly handle when we get to the end of the query (particularly important in book view)

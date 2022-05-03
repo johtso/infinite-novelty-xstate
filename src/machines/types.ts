@@ -9,6 +9,7 @@ interface Image {
   faves: number;
   comments: number;
   views: number;
+  bookid: number;
   isFaved?: boolean;
 }
 

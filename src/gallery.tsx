@@ -1,18 +1,28 @@
 import clsx from "clsx";
-import { Masonry, useInfiniteLoader } from "masonic";
+import { useInfiniteLoader } from "masonic";
+import { ReactComponent as BookIcon } from './icons/book.svg';
 import { ReactComponent as StarIcon } from './icons/star.svg';
 import { Image } from "./machines/types";
+import { Masonry } from "./masonry";
 import { flickrThumbUrl } from "./utils";
 
 
-export function Gallery({ images, loadMore, toggleFave }: { images: Image[], loadMore: (startIndex: number, stopIndex: number) => void, toggleFave: (id: string) => void }) {
+interface GalleryProps {
+  images: Image[];
+  loadMore: (startIndex: number, stopIndex: number) => void;
+  toggleFave: (id: string) => void;
+  paused?: boolean;
+  // viewBook: (id: string) => void;
+}
+
+export function Gallery({ images, loadMore, toggleFave, paused }: GalleryProps) {
   const maybeLoadMore = useInfiniteLoader(
     (startIndex, stopIndex) => {
       loadMore(startIndex, stopIndex);
     },
     {
       isItemLoaded: (index, items) => !!items[index],
-      minimumBatchSize: 32,
+      minimumBatchSize: 10,
       threshold: 3
     }
   );
@@ -23,21 +33,32 @@ export function Gallery({ images, loadMore, toggleFave }: { images: Image[], loa
     const ratio = imageWidth / imageHight;
     const height = width / ratio;
 
+    const imageUrl = flickrThumbUrl(data.id, data.server, data.secret, data.width, data.height, 300);
     return (
       <div
         className={clsx("gallery-image")}
         key={data.id}
-        style={{ height: `${height}px`, }}
+        style={{ height: `${height}px`, backgroundImage: `url(${imageUrl})` }}
         data-faved={data.isFaved ? "yes" : "no"}
       >
-        <img
+        {/* <img
           alt="gallery image"
           src={flickrThumbUrl(data.id, data.server, data.secret, data.width, data.height, 300)}
           loading="eager"
-        />
-        <StarIcon
-          onClick={() => toggleFave(data.id)}
-        />
+        /> */}
+        <div className="image-buttons">
+          <StarIcon
+            className="fave-button image-button"
+            onClick={() => toggleFave(data.id)}
+          />
+          <a
+            href={`/book/${data.bookid}`}
+            title="view book"
+            className="book-button image-button no-style-anchor"
+          >
+            <BookIcon />
+          </a>
+        </div>
       </div>
     )
   };
@@ -52,6 +73,7 @@ export function Gallery({ images, loadMore, toggleFave }: { images: Image[], loa
       overscanBy={3}
       render={GalleryImage}
       itemKey={(data) => data.id}
+      paused={paused}
     />
   );
 }

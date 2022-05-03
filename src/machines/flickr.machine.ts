@@ -245,7 +245,7 @@ export const flickrMachine = createMachine({
         return () => controller.abort();
       }
     }
-  })
+  }).withConfig({ actions: {}, guards: {}, services: {} });
 
 
 function makeFaveToggleRequestCallback(
