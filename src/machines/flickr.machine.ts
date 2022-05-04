@@ -53,9 +53,12 @@ export const flickrMachine = createMachine({
   initial: "starting",
   on: {
     "*": {
-      actions: (ctx, event) => {
-        console.log(event);
+      actions: (ctx, event, { state }) => {
+        console.log(`flickr service got event: ${event.type} while in state ${state.value}`);
       }
+    },
+    TOGGLE_FAVE_IMAGE: {
+      actions: () => showToast("Please enable Flickr integration to fave images")
     },
     FLICKR_FAVE_TOGGLE_REQUEST_FINISHED: {
       actions: "removeFaveRequest",
@@ -112,7 +115,7 @@ export const flickrMachine = createMachine({
         },
         AUTH_ERROR: {
           actions: "showError",
-          target: "notAuthorised"
+          // target: "notAuthorised"
         }
       },
     },

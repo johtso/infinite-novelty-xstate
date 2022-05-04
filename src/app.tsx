@@ -8,6 +8,12 @@ import { flickrMachine } from './machines/flickr.machine';
 import { makeImageStreamMachine } from "./machines/imagestream.machine";
 import mainMachine from "./machines/main.machine";
 
+// inspect({
+//   // options
+//   // url: 'https://stately.ai/viz?inspect', // (default)
+//   iframe: false // open in new window
+// });
+
 type FaveStates = { [key: string]: boolean };
 
 type MainMachine = ActorRefFrom<typeof mainMachine>;
@@ -28,12 +34,14 @@ const useCommandBar = (service: InterpreterFrom<typeof mainMachine>) => {
 
       window.CommandBar.addRouter(
         (url) => {
-          service.send({ type: "CHANGE_URL", url: url }, { to: "#router" });
+          service.send({ type: "ROUTER.NAVIGATE_TO_URL", url: url });
         }
       );
 
       window.CommandBar.addCallback("startFlickrAuth", () => {
-        flickr.send({ type: "AUTHORISE" });
+        console.log("sending flickr auth event to:", flickr);
+        console.log(flickr.getSnapshot());
+        service.send("AUTHORISE");
       });
     });
   }, []);
@@ -73,8 +81,13 @@ const useBookImageStream = (service: MainMachine): ImageStreamMachine => {
 }
 
 export function App() {
-  const service = useInterpret(mainMachine, { actions: {} }, (state) => { });
+  const service = useInterpret(mainMachine, { devTools: true });
   const flickr = useFlickrService(service);
+
+  // useEffect(() => {
+  //   console.log("sending auth event to", flickr);
+  //   flickr.send("AUTHORISE");
+  // }, [flickr]);
 
   useCommandBar(service);
 
@@ -83,23 +96,25 @@ export function App() {
   const mainImageStream = useMainImageStream(service);
   const bookImageStream = useBookImageStream(service);
 
-  const viewingBook = useSelector(service, (state) => {
-    return state.matches("active.viewingBook");
-  });
+  // const viewingBook = useSelector(service, (state) => {
+  //   return state.matches("active.bookStream.active");
+  // });
 
-  console.log({ mainImageStream, bookImageStream, viewingBook });
+  console.log({ mainImageStream, bookImageStream });
 
-  if (!mainImageStream) {
+  if (!mainImageStream && !bookImageStream) {
     return <div className="loadingspinner"></div>;
   } else {
     return (
       <div className={clsx("container", isAuthed && "flickr-authed")}>
-        <ImageStream
-          hidden={viewingBook}
-          service={mainImageStream}
-          flickr={flickr}
-        />
-        {viewingBook &&
+        {mainImageStream &&
+          <ImageStream
+            hidden={Boolean(bookImageStream)}
+            service={mainImageStream}
+            flickr={flickr}
+          />
+        }
+        {bookImageStream &&
           <ImageStream
             service={bookImageStream}
             flickr={flickr}
@@ -141,22 +156,26 @@ const ImageStream = ({ hidden, service, flickr }: { hidden?: boolean, service: I
     }
   });
 
-  return (
-    <div className={clsx(hidden && "hidden")}>
-      <Gallery
-        images={imagesWithFaves}
-        loadMore={
-          (startIndex: number, stopIndex: number) => {
-            service.send({ type: "LOAD_MORE_IMAGES", startIndex, limit: (stopIndex - startIndex) });
+  if (!imagesWithFaves.length) {
+    return <div className="loadingspinner"></div>
+  } else {
+    return (
+      <div className={clsx(hidden && "hidden")}>
+        <Gallery
+          images={imagesWithFaves}
+          loadMore={
+            (startIndex: number, stopIndex: number) => {
+              service.send({ type: "LOAD_MORE_IMAGES", startIndex, limit: (stopIndex - startIndex) });
+            }
           }
-        }
-        toggleFave={
-          (imageId: string) => {
-            flickr.send({ type: "TOGGLE_FAVE_IMAGE", imageId: imageId });
+          toggleFave={
+            (imageId: string) => {
+              flickr.send({ type: "TOGGLE_FAVE_IMAGE", imageId: imageId });
+            }
           }
-        }
-        paused={hidden}
-      />
-    </div>
-  )
+          paused={hidden}
+        />
+      </div>
+    );
+  }
 }

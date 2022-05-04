@@ -31,7 +31,8 @@ async function initWorker() {
           serverMode: "full", // file is just a plain old full sqlite database
           requestChunkSize: 4096, // the page size of the  sqlite database (by default 4096)
           // url: (__MODE__ === "production") ? "https://data.infinitenovelty.com/file/iabi-data/db.3.sqlite" : "db.sqlite"
-          url: "https://cdn.infinitenovelty.com/file/iabi-data/db.3.sqlite"
+          url: "https://cdn.infinitenovelty.com/file/iabi-data/db.4.sqlite"
+          // url: "/db.4.sqlite"
         }
       }
       // {
@@ -76,6 +77,7 @@ async function cursorQuery(randomStart: boolean, order: { fields: (keyof Cursor)
   }
 
   let qObj = q.build();
+  console.log("executing SQL query:", qObj.sql);
   images = await worker.db.query(qObj.sql, qObj.values) as Image[];
   let lastImage = images[images.length - 1];
   let newCursor: Cursor = {
@@ -102,6 +104,7 @@ let queries = {
   "randompopular": apply(randomCursorQuery, "faves > 0"),
   "randomoverlooked": apply(randomCursorQuery, "views < 50 and faves = 0"),
   "popular": apply(cursorQuery, false, { fields: ["faves", "views", "comments", "id"], direction: "desc" }, "faves > 0"),
-} as { [key in QueryName]: (worker: WorkerHttpvfs, limit: number, cursor: Cursor | null, initial: boolean) => Promise<{ images: Image[], cursor: Cursor }> };
+  "book": (bookId: string, ...args: [WorkerHttpvfs, number, Cursor | null, boolean]) => cursorQuery(false, { fields: ["faves", "views", "comments", "id"], direction: "desc" }, `bookid = ${bookId}`, ...args),
+};
 
 export { initWorker, queries, QUERY_NAMES };

@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { useInfiniteLoader } from "masonic";
 import { ReactComponent as BookIcon } from './icons/book.svg';
+import { ReactComponent as ExternalLinkIcon } from './icons/external-link.svg';
 import { ReactComponent as StarIcon } from './icons/star.svg';
 import { Image } from "./machines/types";
 import { Masonry } from "./masonry";
@@ -47,22 +48,38 @@ export function Gallery({ images, loadMore, toggleFave, paused }: GalleryProps) 
           loading="eager"
         /> */}
         <div className="image-buttons">
-          <StarIcon
-            className="fave-button image-button"
-            onClick={() => toggleFave(data.id)}
-          />
-          <a
-            href={`/book/${data.bookid}`}
-            title="view book"
-            className="book-button image-button no-style-anchor"
-          >
-            <BookIcon />
-          </a>
+          <div className="button-row">
+            <span className="fave-count">{data.isFaved ? data.faves + 1 : data.faves}</span>
+            <StarIcon
+              className="fave-button image-button"
+              onClick={() => toggleFave(data.id)}
+              title="fave this image"
+            />
+          </div>
+          <div className="button-row">
+            <a
+              href={`/book/${data.bookid}`}
+              title="view book"
+              className="no-style-anchor"
+            >
+              <BookIcon className="book-button image-button" />
+            </a>
+          </div>
+          <div className="button-row">
+            <a
+              href={`https://www.flickr.com/photos/internetarchivebookimages/${data.id}`}
+              title="view on flickr"
+              target="_blank"
+              className="no-style-anchor"
+            >
+              <ExternalLinkIcon className="flickr-button image-button" />
+            </a>
+          </div>
         </div>
       </div>
     )
   };
-
+  console.log("IMAGES", images);
 
   return (
     <Masonry
