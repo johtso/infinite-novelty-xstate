@@ -241,7 +241,7 @@ a:active {
   color: white;
   font-weight: 500;
   font-size: 15px;
-  filter: drop-shadow(0px 0px 4px rgba(0, 0, 0, 0.9)) opacity(0.8);
+  filter: drop-shadow(0px 0px 4px rgba(0, 0, 0, 0.9));
 }
 
 .hidden {
