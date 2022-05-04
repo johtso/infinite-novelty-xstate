@@ -8,19 +8,12 @@ import { flickrMachine } from './machines/flickr.machine';
 import { makeImageStreamMachine } from "./machines/imagestream.machine";
 import mainMachine from "./machines/main.machine";
 
-// inspect({
-//   // options
-//   // url: 'https://stately.ai/viz?inspect', // (default)
-//   iframe: false // open in new window
-// });
 
 type FaveStates = { [key: string]: boolean };
 
 type MainMachine = ActorRefFrom<typeof mainMachine>;
 type ImageStreamMachine = ActorRefFrom<ReturnType<typeof makeImageStreamMachine>>;
 type FlickrMachine = ActorRefFrom<typeof flickrMachine>;
-
-// const getFlickr = (state: StateFrom<typeof mainMachine>) => state.children.flickr as ActorRefFrom<typeof flickrMachine>
 
 const useCommandBar = (service: InterpreterFrom<typeof mainMachine>) => {
   const flickr = useFlickrService(service);
@@ -81,13 +74,8 @@ const useBookImageStream = (service: MainMachine): ImageStreamMachine => {
 }
 
 export function App() {
-  const service = useInterpret(mainMachine, { devTools: true });
+  const service = useInterpret(mainMachine);
   const flickr = useFlickrService(service);
-
-  // useEffect(() => {
-  //   console.log("sending auth event to", flickr);
-  //   flickr.send("AUTHORISE");
-  // }, [flickr]);
 
   useCommandBar(service);
 
