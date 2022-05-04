@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "xstate typegen \"src/**/*.ts?(x)\" && tsc && vite build",
     "preview": "vite preview",
     "test": "jest"
   },
@@ -34,6 +34,7 @@
     "@types/prop-types": "^15.7.5",
     "@types/react": "^18.0.8",
     "@types/toastify-js": "^1.11.0",
+    "@xstate/cli": "^0.1.7",
     "jest": "^28.0.3",
     "prettier": "^2.6.2",
     "ts-jest": "^28.0.0-next.3",
